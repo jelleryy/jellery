@@ -19,7 +19,7 @@ body {
   overflow: hidden;
 }
 
-/* BACKGROUND GIF */
+/* BACKGROUND VIDEO */
 #bg {
   position: fixed;
   top: 0;
@@ -101,8 +101,10 @@ a.link:hover {
   <span>ENTER</span>
 </div>
 
-<!-- BACKGROUND GIF -->
-<img id="bg" src="bg.gif" alt="background">
+<!-- BACKGROUND VIDEO -->
+<video id="bg" autoplay muted loop playsinline>
+  <source src="bg.mp4" type="video/mp4">
+</video>
 
 <audio id="music" loop>
   <source src="music.mp3" type="audio/mpeg">
@@ -133,4 +135,3 @@ enter.addEventListener("click", () => {
 
 </body>
 </html>
-
