@@ -108,6 +108,40 @@ a.link:hover {
   text-overflow: ellipsis;
 }
 
+/* TIME + VOLUME */
+.metaRow{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 2px 6px;
+}
+
+.time {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.65);
+  white-space: nowrap;
+}
+
+.vol {
+  display:flex;
+  align-items:center;
+  gap: 8px;
+}
+
+.vol label{
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.65);
+  user-select:none;
+}
+
+/* lightweight range styling */
+.vol input[type="range"]{
+  width: 110px;
+  accent-color: rgba(70,140,255,0.9);
+}
+
+/* CONTROLS */
 .controls {
   display: flex;
   align-items: center;
@@ -171,6 +205,16 @@ a.link:hover {
         <div class="artist" id="trackArtist">—</div>
       </div>
 
+      <!-- TIME + VOLUME -->
+      <div class="metaRow">
+        <div class="time"><span id="curTime">0:00</span> / <span id="durTime">0:00</span></div>
+
+        <div class="vol">
+          <label for="volRange">vol</label>
+          <input id="volRange" type="range" min="0" max="1" step="0.01" value="0.40">
+        </div>
+      </div>
+
       <div class="controls">
         <button class="ctrl" id="prevBtn" aria-label="Previous">⏮</button>
         <button class="ctrl big" id="playBtn" aria-label="Play/Pause">▶</button>
@@ -191,7 +235,11 @@ const prevBtn = document.getElementById("prevBtn");
 const playBtn = document.getElementById("playBtn");
 const nextBtn = document.getElementById("nextBtn");
 
-// 4 tracks (from your screenshot)
+const curTimeEl = document.getElementById("curTime");
+const durTimeEl = document.getElementById("durTime");
+const volRange = document.getElementById("volRange");
+
+// 4 tracks
 const playlist = [
   { name: "losing", artist: "Lonnex", src: "01.mp3" },
   { name: "Chimeras", artist: "Tim Hecker", src: "02.mp3" },
@@ -200,6 +248,7 @@ const playlist = [
 ];
 
 let idx = 0;
+let fading = false;
 
 function load(i) {
   idx = (i + playlist.length) % playlist.length;
@@ -213,10 +262,57 @@ function updateIcon() {
   playBtn.textContent = music.paused ? "▶" : "⏸";
 }
 
+function fmtTime(sec){
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2,"0")}`;
+}
+
+function updateTimes(){
+  curTimeEl.textContent = fmtTime(music.currentTime || 0);
+  durTimeEl.textContent = fmtTime(music.duration || 0);
+}
+
+/* Smooth cross-fade (lightweight) */
+async function fadeToTrack(newIndex){
+  if (fading) return;
+  fading = true;
+
+  const startVol = Number(volRange.value) || 0.4;
+
+  // fade out
+  for (let v = startVol; v >= 0.02; v -= 0.04){
+    music.volume = Math.max(0, v);
+    await new Promise(r => setTimeout(r, 20));
+  }
+  music.pause();
+
+  load(newIndex);
+
+  // play + fade in
+  music.volume = 0.02;
+  try { await music.play(); } catch(e) {}
+  for (let v = 0.02; v <= startVol; v += 0.04){
+    music.volume = Math.min(startVol, v);
+    await new Promise(r => setTimeout(r, 20));
+  }
+
+  updateIcon();
+  fading = false;
+}
+
+/* Volume control */
+function applyVolume(){
+  music.volume = Number(volRange.value);
+}
+volRange.addEventListener("input", applyVolume);
+
+/* Buttons */
 playBtn.addEventListener("click", async () => {
+  applyVolume();
   if (music.paused) {
-    music.volume = 0.4;
-    await music.play();
+    try { await music.play(); } catch(e) {}
   } else {
     music.pause();
   }
@@ -224,32 +320,44 @@ playBtn.addEventListener("click", async () => {
 });
 
 prevBtn.addEventListener("click", async () => {
-  load(idx - 1);
-  music.volume = 0.4;
-  await music.play();
-  updateIcon();
+  applyVolume();
+  if (!music.paused) {
+    await fadeToTrack(idx - 1);
+  } else {
+    load(idx - 1);
+    updateTimes();
+    updateIcon();
+  }
 });
 
 nextBtn.addEventListener("click", async () => {
-  load(idx + 1);
-  music.volume = 0.4;
-  await music.play();
-  updateIcon();
+  applyVolume();
+  if (!music.paused) {
+    await fadeToTrack(idx + 1);
+  } else {
+    load(idx + 1);
+    updateTimes();
+    updateIcon();
+  }
 });
 
 music.addEventListener("ended", async () => {
-  load(idx + 1);
-  music.volume = 0.4;
-  await music.play();
-  updateIcon();
+  applyVolume();
+  await fadeToTrack(idx + 1);
 });
+
+/* Time updates */
+music.addEventListener("loadedmetadata", updateTimes);
+music.addEventListener("timeupdate", updateTimes);
 
 music.addEventListener("play", updateIcon);
 music.addEventListener("pause", updateIcon);
 
-// start state: first track loaded, NOT playing
+/* start state */
 load(0);
+applyVolume();
 updateIcon();
+updateTimes();
 </script>
 
 </body>
